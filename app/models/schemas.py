@@ -27,3 +27,5 @@ class ChatResponse(BaseModel):
     crisis_resources: Optional[List[str]]
     session_id: str
     alert_sent: bool = False
+    emergency_contact_recommended: bool = False
+    emergency_contact_message: Optional[str] = None
