@@ -1,4 +1,4 @@
-const API_URL = "http://127.0.0.1:8000/api/v1/chat";
+const API_URL = "https://mindease-v3t3.onrender.com/api/v1/chat";
 
 export const sendChatMessage = async (message, history = []) => {
   const response = await fetch(API_URL, {

@@ -196,7 +196,7 @@ export default function MentalHealthDashboard() {
                 </div>
 
                 <p className="text-slate-500/90 text-sm mt-6 text-center leading-relaxed max-w-xs">
-                  Follow the rhythm slowly and allow your breathing to settle.
+                  Follow the rhythm slowly and allow you breathing to settle.
                 </p>
               </div>
             </div>
