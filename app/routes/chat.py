@@ -1,13 +1,18 @@
 from fastapi import APIRouter, HTTPException
-from app.models.schemas import ChatRequest, ChatResponse
+from app.models.schemas import ChatMessage, ChatRequest, ChatResponse
 from app.services.gemini_service import get_ai_response
 from app.services.alert_service import send_crisis_alert
 import sqlite3
 
 router = APIRouter()
 
-def save_chat_message(session_id: str, role: str, content: str):
+def get_db():
     conn = sqlite3.connect("mindease.db")
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_chat_table():
+    conn = get_db()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS chat_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -17,6 +22,27 @@ def save_chat_message(session_id: str, role: str, content: str):
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    conn.commit()
+    conn.close()
+
+def get_chat_history(session_id: str, limit: int = 6) -> list[ChatMessage]:
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT role, content
+        FROM chat_history
+        WHERE session_id = ?
+        ORDER BY id DESC
+        LIMIT ?
+    """, (session_id, limit)).fetchall()
+    conn.close()
+
+    return [
+        ChatMessage(role=row["role"], content=row["content"])
+        for row in reversed(rows)
+    ]
+
+def save_chat_message(session_id: str, role: str, content: str):
+    conn = get_db()
     conn.execute(
         "INSERT INTO chat_history (session_id, role, content) VALUES (?, ?, ?)",
         (session_id, role, content)
@@ -24,15 +50,20 @@ def save_chat_message(session_id: str, role: str, content: str):
     conn.commit()
     conn.close()
 
+init_chat_table()
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
+    history = get_chat_history(request.session_id)
+    if not history and request.history:
+        history = request.history
+
     try:
-        result = get_ai_response(request.message, request.history)
+        result = get_ai_response(request.message, history)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
 
     save_chat_message(request.session_id, "user", request.message)
-    save_chat_message(request.session_id, "assistant", result["reply"])
 
     alert_sent = False
     emergency_contact_recommended = request.emergency_contact is None
@@ -57,6 +88,8 @@ async def chat(request: ChatRequest):
         emergency_contact_message = (
             "Optional but recommended: add one trusted Telegram contact so MindEase can alert them during a crisis."
         )
+
+    save_chat_message(request.session_id, "assistant", result["reply"])
 
     return ChatResponse(
         reply=result["reply"],

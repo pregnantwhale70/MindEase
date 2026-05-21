@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 
 class ChatMessage(BaseModel):
@@ -12,7 +12,7 @@ class EmergencyContact(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     session_id: str
-    history: List[ChatMessage] = []
+    history: List[ChatMessage] = Field(default_factory=list)
     emergency_contact: Optional[EmergencyContact] = None
 
 class EmotionScores(BaseModel):
