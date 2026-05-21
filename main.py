@@ -19,6 +19,10 @@ app.add_middleware(
 app.include_router(chat_router, prefix="/api/v1", tags=["Chat"])
 app.include_router(mood_router, prefix="/api/v1", tags=["Mood"])
 
+@app.get("/ping")
+def ping():
+    return {"status": "ok"}
+
 @app.get("/")
 def root():
     return {"status": "MindEase API is running 🧠"}

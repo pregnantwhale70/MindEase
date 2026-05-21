@@ -31,14 +31,15 @@ LANGUAGE STYLE FOR INDIA:
 - Do not overdo slang. The reply should still feel caring and respectful.
 
 GOOD STYLE EXAMPLES:
-User: "my crush proposed me!" -> "Wait seriously?! Arre yaar, that's such a cute moment. Kaise bola unhone?"
-User: "she broke up with me" -> "Oh no... yeh kaafi hurt karta hai. Suddenly hua ya kuch time se issues chal rahe the?"
+User: "my crush proposed me!" -> "Wait seriously?! Arre bhaisabh ,yeh toh badhiya baat hai, Kaise bola usne?"
+User: "she broke up with me" -> "abe bc yeh kaise hua ,kuch badhiya kha le modd badhiya ho jayga . Suddenly hua ya kuch time se issues chal rahe the?"
 User: "my family is pressuring me" -> "Uff, ghar se pressure aaye toh bahut heavy lagta hai. Kis cheez ke liye pressure kar rahe hain?"
-User: "I got 49/50 in my exam!" -> "49 out of 50?! Arre wah, you absolutely smashed it. Kaunsa subject tha?"
+User: "I got 49/50 in my exam!" -> "49 out of 50?! Arre wah, top kardiya kya ?. Kaunsa subject tha?"
 User: "hello i got full marks in my chemistry paper and i am so happy" -> "Full marks in chemistry?! Arre wah, that's huge. Bahut proud feel ho raha hoga na?"
 
 CRISIS RULE - NON NEGOTIABLE:
 If message contains: suicide / kill myself / want to die / hurt myself / end my life / better off without me / everyone would be better off / looking up things i shouldn't
+Also treat Hinglish/Hindi crisis phrases as crisis: marne ka mann, marna chahta/chahti hu, jaan dena, jeena nahi, zinda nahi rehna, khud ko maarna, galat kadam uthana, sab khatam karna, duniya chhodna.
 Set is_crisis = true, anxiety_score = 9, stress_score = 9.
 
 SCORING:
@@ -61,7 +62,41 @@ CRISIS_RESOURCES = [
 MAX_HISTORY_CONTEXT = 6
 GEMINI_MODEL = "gemini-2.5-flash"
 
+def normalize_hinglish_text(message: str) -> str:
+    text = message.lower()
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    replacements = {
+        "nhi": "nahi",
+        "nai": "nahi",
+        "nahin": "nahi",
+        "rhena": "rehna",
+        "rhehna": "rehna",
+        "rhana": "rehna",
+        "rahna": "rehna",
+        "rhenna": "rehna",
+        "rehnna": "rehna",
+        "jina": "jeena",
+        "jeena": "jeena",
+        "maan": "mann",
+        "man": "mann",
+        "marrna": "marna",
+        "marr": "mar",
+        "jaau": "jau",
+        "jaoon": "jau",
+        "jaaun": "jau",
+        "chhod": "chod",
+        "chhor": "chod",
+        "khudko": "khud ko",
+        "khud-ko": "khud ko",
+    }
+
+    words = [replacements.get(word, word) for word in text.split()]
+    return " ".join(words)
+
 def is_crisis_message(message: str) -> bool:
+    text = normalize_hinglish_text(message)
     keywords = [
         "kill myself", "suicide", "want to die", "end my life",
         "hurt myself", "self harm", "cant take it", "can't take it",
@@ -72,15 +107,72 @@ def is_crisis_message(message: str) -> bool:
         "better off without me", "everyone would be better off",
         "throwing in the towel", "looking up things i shouldn't",
         "how much longer can i", "tired of pretending",
+        "marne ka mann", "marne ka man", "marne ka maan",
+        "marne ka dil", "marna chahta", "marna chahti",
+        "marna chahta hu", "marna chahta hoon",
+        "marna chahti hu", "marna chahti hoon",
+        "mujhe marna hai", "mujhe marrna hai",
+        "ab marna hai", "aaj marna hai",
+        "mar jana", "mar jaana", "mar jaau", "mar jau",
+        "mar jaunga", "mar jaungi", "main mar jaunga", "main mar jaungi",
+        "mai mar jaunga", "mai mar jaungi",
+        "jaan dena", "jaan de du", "jaan de doon",
+        "apni jaan dena", "apni jaan de du", "apni jaan de doon",
+        "jaan le lunga", "jaan le lungi", "apni jaan le lunga",
+        "apni jaan le lungi",
+        "jeena nahi", "jina nahi", "jeene ka mann nahi",
+        "jeene ka man nahi", "jeene ka maan nahi",
+        "jeene ka mann nahi hai", "jeene ka man nahi hai",
+        "ab jeena nahi", "ab jina nahi",
+        "jeena nahi chahta", "jeena nahi chahti",
+        "jina nahi chahta", "jina nahi chahti",
+        "jeena nahi hai", "jina nahi hai",
+        "zinda nahi rehna", "zinda nhi rehna",
+        "zinda nahi rehna chahta", "zinda nahi rehna chahti",
+        "zinda rehne ka mann nahi", "zinda rehne ka man nahi",
+        "zinda rehna nahi", "zinda rehna nhi",
+        "khud ko maar", "khudko maar", "apne aap ko maar",
+        "khud ko khatam", "khudko khatam", "apne aap ko khatam",
+        "apni life end", "life end kar", "life khatam",
+        "life khatam kar", "sab khatam karna", "sab khatam kar dunga",
+        "sab khatam kar dungi", "sab end karna", "sab end kar dunga",
+        "sab end kar dungi",
+        "galat kadam", "galat kadam uthana", "galat kadam uthane",
+        "kuch galat kar", "kuch galat karna", "kuch ulta seedha",
+        "kuch ulta seedha kar", "kuch ulta seedha karna",
+        "duniya chhod", "duniya chod", "duniya chhodna", "duniya chodna",
+        "sabko chhod ke jana", "sabko chod ke jana",
+        "hamesha ke liye so jana", "hamesha ke liye sona",
+        "wapas nahi aana", "laut ke nahi aana",
     ]
-    return any(keyword in message.lower() for keyword in keywords)
+    return any(keyword in text for keyword in keywords)
+
+def is_positive_mood_message(message: str) -> bool:
+    text = normalize_hinglish_text(message)
+    positive_terms = [
+        "happy", "feeling good", "feel good", "i am good", "i'm good",
+        "khush", "kush", "khushi", "acha lag raha", "accha lag raha",
+        "achha lag raha", "badiya", "badhiya", "mast", "maza aa raha",
+        "mood acha", "mood accha", "mood achha",
+    ]
+    distress_terms = [
+        "not happy", "not good", "sad", "upset", "worried", "anxious",
+        "stress", "stressed", "tension", "pareshan", "dukhi", "udaas",
+        "dar", "darr", "scared", "cry", "rona",
+    ]
+
+    has_positive = any(term in text for term in positive_terms)
+    has_distress = any(term in text for term in distress_terms)
+
+    return has_positive and not has_distress and not is_crisis_message(message)
 
 def is_positive_achievement_message(message: str) -> bool:
-    text = message.lower()
+    text = normalize_hinglish_text(message)
     positive_terms = [
         "happy", "so happy", "excited", "proud", "great", "amazing",
         "good news", "best", "aced", "won", "passed", "cleared",
         "full marks", "top marks", "got marks", "scored", "score",
+        "khush", "kush", "badiya", "badhiya", "acha lag raha",
     ]
     achievement_terms = [
         "marks", "exam", "paper", "test", "assignment", "result",
@@ -114,18 +206,35 @@ def get_positive_achievement_response(message: str) -> dict:
         "crisis_resources": None,
     }
 
+def get_positive_mood_response(message: str) -> dict:
+    return {
+        "reply": (
+            "Arre nice, aaj mood khush hai sunke accha laga. "
+            "Kuch special hua ya bas day achha ja raha hai?"
+        ),
+        "emotion_scores": EmotionScores(
+            anxiety_score=3,
+            stress_score=3,
+            emotions=["happy", "calm"],
+        ),
+        "is_crisis": False,
+        "crisis_resources": None,
+    }
+
 def get_fallback_response(message: str) -> dict:
-    text = message.lower()
+    text = normalize_hinglish_text(message)
     crisis = is_crisis_message(message)
 
     if crisis:
         reply = (
-            "I'm really glad you told me this. Please don't stay alone with this feeling right now. "
-            "Can you call or message one trusted person near you and tell them you are not safe?"
+            "Mujhe glad hai tumne yeh bola. Please abhi is feeling ke saath akele mat raho. "
+            "Kya tum kisi trusted person ko abhi call ya message kar sakte ho?"
         )
         anxiety, stress, emotions = 9, 9, ["distressed", "unsafe"]
     elif is_positive_achievement_message(message):
         return get_positive_achievement_response(message)
+    elif is_positive_mood_message(message):
+        return get_positive_mood_response(message)
     elif any(word in text for word in ["exam", "study", "marks", "math", "assignment", "test"]):
         reply = (
             "Uff, exam pressure sach mein dimaag pe chadh jaata hai. "
@@ -212,6 +321,9 @@ def get_ai_response(message: str, history: list[ChatMessage]) -> dict:
             stress = min(stress, 2)
             if any(term in parsed.get("reply", "").lower() for term in ["heavy", "fear of failing", "workload", "pressure"]):
                 return get_positive_achievement_response(message)
+        elif is_positive_mood_message(message):
+            anxiety = min(anxiety, 3)
+            stress = min(stress, 3)
 
         return {
             "reply": parsed.get("reply", "Hey, main sun raha hoon. What's on your mind?"),
