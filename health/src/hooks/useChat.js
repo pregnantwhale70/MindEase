@@ -11,7 +11,7 @@ export const useChat = () => {
 
   const [loading, setLoading] = useState(false);
   const [stress, setStress] = useState(0);
-  const [anxiety, setAnxiety] = useState(0)
+  const [anxiety, setAnxiety] = useState(0);
 
   const sendMessage = async (input) => {
     if (!input.trim()) return;
@@ -26,7 +26,14 @@ export const useChat = () => {
     setLoading(true);
 
     try {
-      const data = await sendChatMessage(input);
+      const history = messages
+        .filter((message) => message.role === "user" || message.role === "assistant")
+        .map((message) => ({
+          role: message.role,
+          content: message.text,
+        }));
+
+      const data = await sendChatMessage(input, history);
 
       const aiMessage = {
         role: "assistant",

@@ -50,13 +50,23 @@ def save_chat_message(session_id: str, role: str, content: str):
     conn.commit()
     conn.close()
 
+def get_request_history(request: ChatRequest) -> list[ChatMessage]:
+    if not request.history:
+        return []
+
+    return [
+        message
+        for message in request.history
+        if message.role in {"user", "assistant"} and message.content.strip()
+    ]
+
 init_chat_table()
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    history = get_chat_history(request.session_id)
-    if not history and request.history:
-        history = request.history
+    stored_history = get_chat_history(request.session_id)
+    request_history = get_request_history(request)
+    history = request_history or stored_history
 
     try:
         result = get_ai_response(request.message, history)

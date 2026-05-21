@@ -10,6 +10,11 @@ client = genai.Client(api_key=settings.gemini_api_key)
 SYSTEM_PROMPT = """
 You are MindEase, a warm Indian friend who is emotionally aware without sounding like a therapist.
 
+CONVERSATION CONTINUITY:
+- Use the recent chat history as context for the user's latest message.
+- If the user changes wording, adds a detail, or answers your question in the same session, continue the same conversation instead of greeting or restarting.
+- Do not ask "what's on your mind?" when the history already shows what you were discussing.
+
 HOW TO SOUND HUMAN:
 - React to the exact mood of the user's message before giving advice.
 - If they share good news, celebrate first. Do not turn it into worry.
@@ -46,7 +51,7 @@ SCORING:
 - 1-2: Happy, excited, proud, achieved something good
 - 3-4: Neutral, calm, okay
 - 5-6: Mild stress or worry
-- 7-8: Sad, heartbroken, anxious, family pressure
+- 7-8: Sad, heartbroken, anxious, family pressure, social withdrawal, wanting isolation because talking feels hard
 - 9-10: Crisis, suicidal thoughts, self harm
 
 OUTPUT - raw JSON only, no markdown, no backticks:
@@ -191,6 +196,45 @@ def is_positive_achievement_message(message: str) -> bool:
 
     return has_positive and (has_achievement or "!" in message) and not has_distress
 
+def is_social_withdrawal_message(message: str) -> bool:
+    text = normalize_hinglish_text(message)
+    withdrawal_terms = [
+        "baat karne ka mann nahi",
+        "baat karne ka mann nahi kara",
+        "baat karne ka mann nahi kar raha",
+        "baat karne ka mann nahi karra",
+        "kisi se baat karne ka mann nahi",
+        "kisi se baat nahi",
+        "baat nahi karni",
+        "baat nahi karna",
+        "talk to anyone",
+        "dont want to talk",
+        "don't want to talk",
+        "do not want to talk",
+        "not want to talk",
+        "want to be alone",
+        "be alone",
+        "alone rehna",
+        "akela rehna",
+        "akele rehna",
+        "solitude",
+        "isolate",
+        "isolated",
+    ]
+    low_mood_terms = [
+        "mann nahi",
+        "man nahi",
+        "mood nahi",
+        "atp",
+        "just want",
+        "bas",
+    ]
+
+    has_withdrawal = any(term in text for term in withdrawal_terms)
+    has_low_mood = any(term in text for term in low_mood_terms)
+
+    return has_withdrawal or ("baat" in text and has_low_mood)
+
 def get_positive_achievement_response(message: str) -> dict:
     return {
         "reply": (
@@ -221,9 +265,16 @@ def get_positive_mood_response(message: str) -> dict:
         "crisis_resources": None,
     }
 
-def get_fallback_response(message: str) -> dict:
+def get_last_user_message(history: list[ChatMessage]) -> str | None:
+    for msg in reversed(history):
+        if msg.role == "user" and msg.content.strip():
+            return msg.content
+    return None
+
+def get_fallback_response(message: str, history: list[ChatMessage] | None = None) -> dict:
     text = normalize_hinglish_text(message)
     crisis = is_crisis_message(message)
+    last_user_message = get_last_user_message(history or [])
 
     if crisis:
         reply = (
@@ -253,11 +304,23 @@ def get_fallback_response(message: str) -> dict:
             "Sabse zyada kis baat ka pressure hai?"
         )
         anxiety, stress, emotions = 7, 8, ["pressured", "stressed"]
+    elif is_social_withdrawal_message(message):
+        reply = (
+            "Yeh wali feeling heavy lag sakti hai, jab kisi se baat karne ka mann hi na kare. "
+            "Theek hai, solitude chahiye toh thoda space lo, bas apne aap ko bilkul cut off mat karna."
+        )
+        anxiety, stress, emotions = 7, 7, ["withdrawn", "low", "overwhelmed"]
     elif any(word in text for word in ["happy", "excited", "passed", "won", "good news"]):
         reply = (
             "Arre wah, that's so good to hear. Properly batao, kya hua?"
         )
         anxiety, stress, emotions = 2, 2, ["happy", "excited"]
+    elif last_user_message:
+        reply = (
+            "Haan, samajh raha hoon. Jo tum pehle bata rahe the usi ka yeh next part lag raha hai. "
+            "Ismein abhi sabse zyada kya feel ho raha hai?"
+        )
+        anxiety, stress, emotions = 5, 5, ["reflective"]
     else:
         reply = (
             "Main sun raha hoon. Jaise bhi mann mein aa raha hai, waise bol do. "
@@ -316,6 +379,9 @@ def get_ai_response(message: str, history: list[ChatMessage]) -> dict:
         if crisis:
             anxiety = max(anxiety, 9)
             stress = max(stress, 9)
+        elif is_social_withdrawal_message(message):
+            anxiety = max(anxiety, 7)
+            stress = max(stress, 7)
         elif is_positive_achievement_message(message):
             anxiety = min(anxiety, 2)
             stress = min(stress, 2)
@@ -338,4 +404,4 @@ def get_ai_response(message: str, history: list[ChatMessage]) -> dict:
 
     except Exception as e:
         print(f"[ERROR] Gemini API failed: {e}")
-        return get_fallback_response(message)
+        return get_fallback_response(message, trimmed_history)

@@ -1,6 +1,6 @@
 const API_URL = "http://127.0.0.1:8000/api/v1/chat";
 
-export const sendChatMessage = async (message) => {
+export const sendChatMessage = async (message, history = []) => {
   const response = await fetch(API_URL, {
     method: "POST",
     headers: {
@@ -9,8 +9,7 @@ export const sendChatMessage = async (message) => {
     body: JSON.stringify({
       message: message,
       session_id: "demo-session",
-
-      history: [],
+      history,
 
       emergency_contact: {
         name: "Demo Contact",
