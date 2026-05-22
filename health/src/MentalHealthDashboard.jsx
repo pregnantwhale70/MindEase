@@ -73,7 +73,7 @@ export default function MentalHealthDashboard() {
                 placeholder="Trusted Contact Name"
                 value={emergencyContactName}
                 onChange={(e) =>
-                  setContactName(e.target.value)
+                  setEmergencyContactName(e.target.value)
                 }
                 className="w-full rounded-2xl border border-white/10 bg-slate-800 px-4 py-3 outline-none text-white placeholder:text-slate-500"
               />
@@ -125,7 +125,7 @@ export default function MentalHealthDashboard() {
                   // save trusted contact
                   localStorage.setItem(
                     "emergencyContactName",
-                    contactName ||
+                    emergencyContactName ||
                     "Trusted Contact"
                   );
 
