@@ -1,19 +1,42 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional
+from pydantic import BaseModel, ConfigDict, Field
+from typing import List, Literal, Optional
 
 class ChatMessage(BaseModel):
-    role: str
+    role: Literal["user", "assistant"]
     content: str
 
 class EmergencyContact(BaseModel):
     name: str
-    telegram_chat_id: str  # ← changed from email
+    telegram_chat_id: str
 
 class ChatRequest(BaseModel):
     message: str
     session_id: str
     history: List[ChatMessage] = Field(default_factory=list)
     emergency_contact: Optional[EmergencyContact] = None
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "message": "yes i can try but have to share my file which are on my laptop",
+                "session_id": "new-session-123",
+                "history": [
+                    {
+                        "role": "user",
+                        "content": "I need to send a document.",
+                    },
+                    {
+                        "role": "assistant",
+                        "content": "What kind of document are you trying to send?",
+                    },
+                ],
+                "emergency_contact": {
+                    "name": "Trusted contact",
+                    "telegram_chat_id": "123456789",
+                },
+            }
+        }
+    )
 
 class EmotionScores(BaseModel):
     anxiety_score: int

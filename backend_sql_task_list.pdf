@@ -1,0 +1,163 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 3 0 R 5 0 R ] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 2374 >>
+stream
+BT
+/F1 20 Tf
+72 742 Td
+(MindEase Backend + SQL Task List) Tj
+/F1 12 Tf
+0 -22 Td
+(For Teammate 2) Tj
+/F1 11 Tf
+0 -28 Td
+(Backend + SQL Task List For MindEase) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(1. Database Setup) Tj
+0 -15 Td
+(   - Use SQLite for now: mindease.db) Tj
+0 -15 Td
+(   - Maintain tables: chat_history, moods, and optional emergency_contacts.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(2. Chat History Backend) Tj
+0 -15 Td
+(   - Store every user and assistant message in chat_history.) Tj
+0 -15 Td
+(   - Fields: id, session_id, role, content, created_at.) Tj
+0 -15 Td
+(   - Fetch last 6 messages by session_id for chatbot memory.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(3. Mood Tracking API) Tj
+0 -15 Td
+(   - Create and maintain POST /api/v1/mood.) Tj
+0 -15 Td
+(   - Save mood score from 1 to 10.) Tj
+0 -15 Td
+(   - Save optional note.) Tj
+0 -15 Td
+(   - Validate score before inserting into DB.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(4. Mood Analytics API) Tj
+0 -15 Td
+(   - Create and maintain GET /api/v1/analytics/{session_id}.) Tj
+0 -15 Td
+(   - Return dates, scores, average mood, highest score, and lowest score.) Tj
+0 -15 Td
+(   - Support days query parameter.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(5. SQL Table Improvements) Tj
+0 -15 Td
+(   - Add constraints: session_id NOT NULL, score CHECK score BETWEEN 1 AND 10.) Tj
+0 -15 Td
+(   - Add role check for user or assistant.) Tj
+0 -15 Td
+(   - Add indexes on session_id in chat_history and moods.) Tj
+0 -15 Td
+(   - Add created_at index for sorting and filtering.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(6. Emergency Contact Storage) Tj
+0 -15 Td
+(   - Create table: id, session_id, name, telegram_chat_id, created_at.) Tj
+0 -15 Td
+(   - Add API to save or update emergency contact.) Tj
+0 -15 Td
+(   - Add API to get emergency contact by session.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(7. Backend Code Cleanup) Tj
+0 -15 Td
+(   - Move repeated DB connection logic into app/core/database.py.) Tj
+0 -15 Td
+(   - Avoid creating tables inside route files if possible.) Tj
+0 -15 Td
+(   - Keep routes focused only on API logic.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(8. Error Handling) Tj
+0 -15 Td
+(   - Return clear errors for missing session, invalid mood score, no mood data, and DB failure.) Tj
+0 -15 Td
+(   - Use proper HTTP status codes.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(9. Testing) Tj
+0 -15 Td
+(   - Test /health, /api/v1/chat, /api/v1/mood, and /api/v1/analytics/{session_id}.) Tj
+0 -15 Td
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 639 >>
+stream
+BT
+/F1 11 Tf
+72 742 Td
+(   - Verify data is actually saved in SQLite.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(10. Optional Upgrade) Tj
+0 -15 Td
+(   - If deployment needs a stronger DB, migrate from SQLite to PostgreSQL later.) Tj
+0 -15 Td
+(   - Add SQLAlchemy models and Alembic migrations.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Short version:) Tj
+0 -15 Td
+(You handle backend + SQL: database schema, chat history storage, mood tracking APIs,) Tj
+0 -15 Td
+(mood analytics API, emergency contact table/API, DB cleanup, indexes/constraints,) Tj
+0 -15 Td
+(and API testing. Current DB is SQLite mindease.db; main tables are chat_history and moods.) Tj
+0 -15 Td
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000123 00000 n 
+0000000249 00000 n 
+0000002675 00000 n 
+0000002801 00000 n 
+0000003491 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+3561
+%%EOF

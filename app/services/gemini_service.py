@@ -303,10 +303,32 @@ def get_last_user_message(history: list[ChatMessage]) -> str | None:
             return msg.content
     return None
 
+def is_vague_continuation_message(message: str) -> bool:
+    text = normalize_hinglish_text(message)
+    if not text:
+        return False
+
+    vague_phrases = {
+        "yes", "yeah", "yep", "no", "nah", "maybe", "idk", "i dont know",
+        "i don't know", "same", "same thing", "that", "this", "it",
+        "that one", "this one", "a little", "kind of", "sort of",
+        "haan", "ha", "nahi", "pata nahi", "same hai", "bas wahi",
+        "wahi", "thoda", "shayad",
+    }
+
+    if text in vague_phrases:
+        return True
+
+    return len(text.split()) <= 3 and any(
+        phrase in text
+        for phrase in ["same", "idk", "pata nahi", "wahi", "that", "this"]
+    )
+
 def get_fallback_response(message: str, history: list[ChatMessage] | None = None) -> dict:
     text = normalize_hinglish_text(message)
     crisis = is_crisis_message(message)
     last_user_message = get_last_user_message(history or [])
+    vague_continuation = last_user_message and is_vague_continuation_message(message)
     use_hinglish = uses_hindi_or_hinglish(message)
 
     if crisis:
@@ -383,7 +405,42 @@ def get_fallback_response(message: str, history: list[ChatMessage] | None = None
                 "That's so good to hear. Tell me properly, what happened?"
             )
         anxiety, stress, emotions = 2, 2, ["happy", "excited"]
-    elif last_user_message:
+    elif any(word in text for word in ["sad", "upset", "cry", "crying", "lonely", "alone", "hurt"]):
+        if use_hinglish:
+            reply = (
+                "Yeh sunke bura laga. Aaj kis cheez ne sabse zyada hurt kiya?"
+            )
+        else:
+            reply = (
+                "I'm sorry, that sounds like a rough place to be in. "
+                "What hurt the most today?"
+            )
+        anxiety, stress, emotions = 6, 7, ["sad", "hurt"]
+    elif any(word in text for word in ["anxious", "anxiety", "worried", "worry", "scared", "panic", "overwhelmed"]):
+        if use_hinglish:
+            reply = (
+                "Uff, anxiety wali feeling body aur dimaag dono ko tired kar deti hai. "
+                "Abhi sabse zyada darr kis baat ka lag raha hai?"
+            )
+        else:
+            reply = (
+                "Anxiety can make everything feel louder than it is. "
+                "What are you most worried might happen?"
+            )
+        anxiety, stress, emotions = 8, 7, ["anxious", "worried"]
+    elif any(word in text for word in ["stress", "stressed", "tension", "overload", "overloaded"]):
+        if use_hinglish:
+            reply = (
+                "Uff, stress jab stack ho jaata hai toh sab kuch heavy lagne lagta hai. "
+                "Sabse zyada load kis cheez ka hai?"
+            )
+        else:
+            reply = (
+                "That sounds like a lot sitting on you at once. "
+                "What's adding the most pressure right now?"
+            )
+        anxiety, stress, emotions = 7, 8, ["stressed", "overwhelmed"]
+    elif vague_continuation:
         if use_hinglish:
             reply = (
                 "Haan, samajh raha hoon. Jo tum pehle bata rahe the usi ka yeh next part lag raha hai. "
