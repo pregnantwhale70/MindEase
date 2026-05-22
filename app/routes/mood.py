@@ -138,7 +138,7 @@ async def get_insights(session_id: str):
 
     conn.close()
 
-    if not rows:
+    if not rows and not emotion_rows:
         return {
             "insights": [
                 "Start logging your mood daily to get personalized insights",
@@ -153,13 +153,6 @@ async def get_insights(session_id: str):
         }
 
     scores = [row["score"] for row in rows]
-    avg = sum(scores) / len(scores)
-    trend = "stable"
-    if scores[-1] > scores[0]:
-        trend = "improving"
-    elif scores[-1] < scores[0]:
-        trend = "declining"
-
     emotion_summary = [
         {
             "anxiety_score": row["anxiety_score"],
@@ -170,10 +163,26 @@ async def get_insights(session_id: str):
         for row in emotion_rows
     ]
 
+    if scores:
+        avg = sum(scores) / len(scores)
+    elif emotion_rows:
+        avg = sum(
+            (row["anxiety_score"] + row["stress_score"]) / 2
+            for row in emotion_rows
+        ) / len(emotion_rows)
+    else:
+        avg = 5
+
+    trend = "stable"
+    if len(scores) >= 2 and scores[-1] > scores[0]:
+        trend = "improving"
+    elif len(scores) >= 2 and scores[-1] < scores[0]:
+        trend = "declining"
+
     pattern_text = f"""
     User mood data last 7 days:
-    - Scores: {scores}
-    - Average: {round(avg, 1)}/10
+    - Scores: {scores if scores else "No mood logs yet"}
+    - Average mood/stress signal: {round(avg, 1)}/10
     - Trend: {trend}
     - Notes from user: {[row["note"] for row in rows if row["note"]]}
     - Chat emotion scores: {emotion_summary}
