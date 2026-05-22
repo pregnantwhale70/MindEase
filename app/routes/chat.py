@@ -118,6 +118,7 @@ async def chat(request: ChatRequest):
             chat_id=request.emergency_contact.telegram_chat_id,
             contact_name=request.emergency_contact.name,
             session_id=request.session_id,
+            user_name=request.user_name,
         )
     elif result["is_crisis"]:
         emergency_contact_message = (

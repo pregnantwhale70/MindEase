@@ -12,6 +12,7 @@ class EmergencyContact(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     session_id: str
+    user_name: Optional[str] = None
     history: List[ChatMessage] = Field(default_factory=list)
     emergency_contact: Optional[EmergencyContact] = None
 
@@ -20,6 +21,7 @@ class ChatRequest(BaseModel):
             "example": {
                 "message": "yes i can try but have to share my file which are on my laptop",
                 "session_id": "new-session-123",
+                "user_name": "Ankit",
                 "history": [
                     {
                         "role": "user",
