@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from app.models.schemas import ChatMessage, ChatRequest, ChatResponse
 from app.services.gemini_service import get_ai_response
 from app.services.alert_service import send_crisis_alert
+import json
 import sqlite3
 
 router = APIRouter()
@@ -19,6 +20,21 @@ def init_chat_table():
             session_id TEXT,
             role TEXT,
             content TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def init_emotion_scores_table():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS emotion_scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT,
+            anxiety_score INTEGER,
+            stress_score INTEGER,
+            emotions TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -50,6 +66,23 @@ def save_chat_message(session_id: str, role: str, content: str):
     conn.commit()
     conn.close()
 
+def save_emotion_scores(session_id: str, emotion_scores):
+    conn = get_db()
+    conn.execute(
+        """
+        INSERT INTO emotion_scores (session_id, anxiety_score, stress_score, emotions)
+        VALUES (?, ?, ?, ?)
+        """,
+        (
+            session_id,
+            emotion_scores.anxiety_score,
+            emotion_scores.stress_score,
+            json.dumps(emotion_scores.emotions),
+        )
+    )
+    conn.commit()
+    conn.close()
+
 def get_request_history(request: ChatRequest) -> list[ChatMessage]:
     if not request.history:
         return []
@@ -57,16 +90,17 @@ def get_request_history(request: ChatRequest) -> list[ChatMessage]:
     return [
         message
         for message in request.history
-        if message.role in {"user", "assistant"} and message.content.strip()
+        if message.content.strip()
     ]
 
 init_chat_table()
+init_emotion_scores_table()
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     stored_history = get_chat_history(request.session_id)
     request_history = get_request_history(request)
-    history = request_history or stored_history
+    history = request_history if request.history else stored_history
 
     try:
         result = get_ai_response(request.message, history)
@@ -84,6 +118,7 @@ async def chat(request: ChatRequest):
             chat_id=request.emergency_contact.telegram_chat_id,
             contact_name=request.emergency_contact.name,
             session_id=request.session_id,
+            user_name=request.user_name,
         )
     elif result["is_crisis"]:
         emergency_contact_message = (
@@ -100,6 +135,7 @@ async def chat(request: ChatRequest):
         )
 
     save_chat_message(request.session_id, "assistant", result["reply"])
+    save_emotion_scores(request.session_id, result["emotion_scores"])
 
     return ChatResponse(
         reply=result["reply"],
