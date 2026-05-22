@@ -213,6 +213,31 @@ def is_positive_achievement_message(message: str) -> bool:
 
     return has_positive and (has_achievement or "!" in message) and not has_distress
 
+def is_positive_relationship_message(message: str) -> bool:
+    text = normalize_hinglish_text(message)
+    positive_terms = [
+        "said yes", "said yess", "she said yes", "he said yes",
+        "they said yes", "accepted", "proposal accepted", "proposed",
+        "crush said yes", "my crush said yes", "dating", "date",
+        "together", "relationship started", "she likes me",
+        "he likes me", "they like me", "love me back",
+    ]
+    relationship_terms = [
+        "crush", "proposal", "proposed", "girlfriend", "boyfriend",
+        "relationship", "date", "love",
+    ]
+    distress_terms = [
+        "breakup", "broke up", "rejected", "said no", "left me",
+        "cheated", "hurt", "sad", "cry", "crying", "anxious",
+        "worried", "stress", "stressed",
+    ]
+
+    has_positive = any(term in text for term in positive_terms)
+    has_relationship = any(term in text for term in relationship_terms)
+    has_distress = any(term in text for term in distress_terms)
+
+    return has_positive and has_relationship and not has_distress
+
 def is_social_withdrawal_message(message: str) -> bool:
     text = normalize_hinglish_text(message)
     withdrawal_terms = [
@@ -297,6 +322,29 @@ def get_positive_mood_response(message: str) -> dict:
         "crisis_resources": None,
     }
 
+def get_positive_relationship_response(message: str) -> dict:
+    if not uses_hindi_or_hinglish(message):
+        reply = (
+            "Wait, she said yes?! That's such a sweet moment. "
+            "You must be feeling on top of the world right now."
+        )
+    else:
+        reply = (
+            "Wait, she said yes?! Arre that's such a sweet moment. "
+            "Abhi toh tum bahut happy feel kar rahe hoge."
+        )
+
+    return {
+        "reply": reply,
+        "emotion_scores": EmotionScores(
+            anxiety_score=1,
+            stress_score=1,
+            emotions=["happy", "excited", "loved"],
+        ),
+        "is_crisis": False,
+        "crisis_resources": None,
+    }
+
 def get_last_user_message(history: list[ChatMessage]) -> str | None:
     for msg in reversed(history):
         if msg.role == "user" and msg.content.strip():
@@ -345,6 +393,8 @@ def get_fallback_response(message: str, history: list[ChatMessage] | None = None
         anxiety, stress, emotions = 9, 9, ["distressed", "unsafe"]
     elif is_positive_achievement_message(message):
         return get_positive_achievement_response(message)
+    elif is_positive_relationship_message(message):
+        return get_positive_relationship_response(message)
     elif is_positive_mood_message(message):
         return get_positive_mood_response(message)
     elif any(word in text for word in ["exam", "study", "marks", "math", "assignment", "test"]):
@@ -524,6 +574,11 @@ def get_ai_response(message: str, history: list[ChatMessage]) -> dict:
             stress = min(stress, 2)
             if any(term in parsed.get("reply", "").lower() for term in ["heavy", "fear of failing", "workload", "pressure"]):
                 return get_positive_achievement_response(message)
+        elif is_positive_relationship_message(message):
+            anxiety = min(anxiety, 2)
+            stress = min(stress, 2)
+            if any(term in parsed.get("reply", "").lower() for term in ["hurt", "rough", "heavy", "what happened"]):
+                return get_positive_relationship_response(message)
         elif is_positive_mood_message(message):
             anxiety = min(anxiety, 3)
             stress = min(stress, 3)
