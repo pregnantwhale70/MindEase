@@ -1,13 +1,15 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
 import './App.css'
 import MentalHealthDashboard from './MentalHealthDashboard'
+import TelegramSetup from './components/telegram'
 
 function App() {
-  return (
-    <MentalHealthDashboard />
-  )
+  const setupComplete = localStorage.getItem("setupComplete")
+
+  if (!setupComplete) {
+    return <TelegramSetup />
+  }
+
+  return <MentalHealthDashboard />
 }
+
 export default App
