@@ -65,7 +65,7 @@ CRISIS_RESOURCES = [
     "AASRA: 9820466627",
 ]
 
-MAX_HISTORY_CONTEXT = 6
+MAX_HISTORY_CONTEXT = 12
 GEMINI_MODEL = "gemini-2.5-flash"
 
 def normalize_hinglish_text(message: str) -> str:
@@ -112,6 +112,8 @@ def uses_hindi_or_hinglish(message: str) -> bool:
         "karne", "lagta", "lagti", "hua", "hui", "hoon", "hu", "hai",
         "mujhe", "tum", "mera", "meri", "mere", "aaj", "kal", "bas",
         "sab", "kuch", "khush", "dukhi", "udaas", "pareshan",
+        "bhai", "toh", "tha", "thi", "abhi", "bataya", "btaaya",
+        "pata", "chale", "chala",
     ]
 
     words = set(text.split())
@@ -351,6 +353,9 @@ def get_last_user_message(history: list[ChatMessage]) -> str | None:
             return msg.content
     return None
 
+def get_history_text(history: list[ChatMessage]) -> str:
+    return " ".join(msg.content for msg in history if msg.content.strip())
+
 def get_valid_gemini_history(history: list[ChatMessage]) -> list[ChatMessage]:
     valid_history = [
         msg
@@ -394,10 +399,91 @@ def is_vague_continuation_message(message: str) -> bool:
         for phrase in ["same", "idk", "pata nahi", "wahi", "that", "this"]
     )
 
+def is_context_reference_message(message: str) -> bool:
+    text = normalize_hinglish_text(message)
+    reference_terms = [
+        "bataya", "btaya", "btaaya", "bola tha", "abhi", "pehle",
+        "already", "told you", "i told", "maine bataya", "maine bola",
+        "pata chale", "pata chala", "yaad",
+    ]
+    return any(term in text for term in reference_terms)
+
+def get_marks_context_details(history: list[ChatMessage]) -> tuple[str | None, str | None]:
+    history_text = get_history_text(history)
+    normalized_history = normalize_hinglish_text(history_text)
+    score_match = re.search(r"\b\d{1,3}\s*/\s*\d{1,3}\b", history_text)
+    score = score_match.group(0).replace(" ", "") if score_match else None
+
+    subjects = ["dsa", "chemistry", "math", "physics", "biology"]
+    subject = next((item.upper() if item == "dsa" else item for item in subjects if item in normalized_history), None)
+
+    return subject, score
+
+def get_contextual_fallback_response(message: str, history: list[ChatMessage]) -> dict | None:
+    if not history or not is_context_reference_message(message):
+        return None
+
+    text = normalize_hinglish_text(message)
+    history_text = normalize_hinglish_text(get_history_text(history))
+    has_marks_context = any(term in history_text for term in ["marks", "score", "scored", "result", "exam"])
+    asks_about_known_marks = any(term in text for term in ["marks", "dsa", "pata chale", "pata chala"])
+
+    if has_marks_context and asks_about_known_marks:
+        subject, score = get_marks_context_details(history)
+        detail = "marks"
+        if subject and score:
+            detail = f"{subject} mein {score}"
+        elif score:
+            detail = score
+        elif subject:
+            detail = f"{subject} ke marks"
+
+        if uses_hindi_or_hinglish(message):
+            reply = (
+                f"Haan bhai, tumne bataya tha {detail} aaye. "
+                "Sach mein kaafi solid score hai, isliye mood achha hona banta hai."
+            )
+        else:
+            reply = (
+                f"Yes, you told me about your {detail}. "
+                "That's a really solid score, so it makes sense you're feeling good."
+            )
+
+        return {
+            "reply": reply,
+            "emotion_scores": EmotionScores(
+                anxiety_score=2,
+                stress_score=1,
+                emotions=["happy", "proud"],
+            ),
+            "is_crisis": False,
+            "crisis_resources": None,
+        }
+
+    return None
+
+def parse_gemini_json(raw: str) -> dict:
+    cleaned = raw.strip()
+    cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
+    cleaned = re.sub(r'\s*```$', '', cleaned)
+    cleaned = cleaned.strip()
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        start = cleaned.find("{")
+        if start == -1:
+            raise
+
+        decoder = json.JSONDecoder()
+        parsed, _ = decoder.raw_decode(cleaned[start:])
+        return parsed
+
 def get_fallback_response(message: str, history: list[ChatMessage] | None = None) -> dict:
+    history = history or []
     text = normalize_hinglish_text(message)
     crisis = is_crisis_message(message)
-    last_user_message = get_last_user_message(history or [])
+    last_user_message = get_last_user_message(history)
     vague_continuation = last_user_message and is_vague_continuation_message(message)
     use_hinglish = uses_hindi_or_hinglish(message)
 
@@ -419,6 +505,8 @@ def get_fallback_response(message: str, history: list[ChatMessage] | None = None
         return get_positive_relationship_response(message)
     elif is_positive_mood_message(message):
         return get_positive_mood_response(message)
+    elif contextual_response := get_contextual_fallback_response(message, history):
+        return contextual_response
     elif any(word in text for word in ["exam", "study", "marks", "math", "assignment", "test"]):
         if use_hinglish:
             reply = (
@@ -579,12 +667,7 @@ def get_ai_response(message: str, history: list[ChatMessage]) -> dict:
             )
         )
 
-        raw = response.text.strip()
-        raw = re.sub(r'^```(?:json)?\s*', '', raw)
-        raw = re.sub(r'\s*```$', '', raw)
-        raw = raw.strip()
-
-        parsed = json.loads(raw)
+        parsed = parse_gemini_json(response.text)
 
         anxiety = max(1, min(10, int(parsed.get("anxiety_score", 3))))
         stress = max(1, min(10, int(parsed.get("stress_score", 3))))

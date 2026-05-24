@@ -1,0 +1,42 @@
+[33mcommit eafd945894bee833d818a77d5d25bf44279c0af5[m
+Author: abhishek <vermas691999@gmail.com>
+Date:   Wed May 20 20:47:57 2026 +0530
+
+    Stop tracking env file
+
+[33mcommit 417e6fa48f5c917165325d90337250b20371cefd[m
+Author: abhishek <vermas691999@gmail.com>
+Date:   Wed May 20 20:47:57 2026 +0530
+
+    Stop tracking env file
+
+[33mcommit 6909d00f003f989c10608fa2a4e66a8331d5d38f[m
+Author: abhishek <vermas691999@gmail.com>
+Date:   Wed May 20 16:11:00 2026 +0530
+
+    feat: complete backend - gemini chat, emotion scoring, crisis detection, telegram alerts
+
+[33mcommit 6ccab97b62dbc84f8fb017e7fe277f977bfaa3c1[m
+Merge: 7181f3b a5145f9
+Author: abhishek <vermas691999@gmail.com>
+Date:   Tue May 19 01:47:59 2026 +0530
+
+    Merge branch 'main' of https://github.com/ankit-verma12/MindEase
+
+[33mcommit 7181f3bb08042a1380e3136003944def310d910e[m
+Author: abhishek <vermas691999@gmail.com>
+Date:   Tue May 19 01:46:55 2026 +0530
+
+    feat: MindEase backend complete - FastAPI + Gemini AI + Telegram crisis alerts
+
+[33mcommit b7136ab99275dae78bae1951174c63efa04c75c7[m
+Author: ankit-verma12 <ankit12verma06@gmail.com>
+Date:   Mon May 18 22:56:53 2026 +0530
+
+    Update .env
+
+[33mcommit e42a81aea5f0f4eeaba6ab3e9e95be94e9c3e261[m
+Author: ankit-verma12 <ankit12verma06@gmail.com>
+Date:   Mon May 18 22:55:38 2026 +0530
+
+    Create .env

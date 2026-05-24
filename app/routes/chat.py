@@ -41,7 +41,7 @@ def init_emotion_scores_table():
     conn.commit()
     conn.close()
 
-def get_chat_history(session_id: str, limit: int = 6) -> list[ChatMessage]:
+def get_chat_history(session_id: str, limit: int = 12) -> list[ChatMessage]:
     conn = get_db()
     rows = conn.execute("""
         SELECT role, content
@@ -83,24 +83,12 @@ def save_emotion_scores(session_id: str, emotion_scores):
     conn.commit()
     conn.close()
 
-def get_request_history(request: ChatRequest) -> list[ChatMessage]:
-    if not request.history:
-        return []
-
-    return [
-        message
-        for message in request.history
-        if message.content.strip()
-    ]
-
 init_chat_table()
 init_emotion_scores_table()
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    stored_history = get_chat_history(request.session_id)
-    request_history = get_request_history(request)
-    history = request_history if request.history else stored_history
+    history = get_chat_history(request.session_id)
 
     try:
         result = get_ai_response(request.message, history)
