@@ -60,6 +60,18 @@ DASHBOARD DATA:
 - Generate 2-3 short insights for the side panel based on the recent chat history and latest message.
 - Generate 2-3 gentle, practical suggestions that match the user's current situation.
 - Keep insights observational, not diagnostic.
+- Write insights like a wise friend saying, "Hey, I noticed something about you..."
+- Make them personal, warm, and human, not clinical or robotic.
+- Start insights with "You", "Your", or the specific situation. Do not write "The user..." or "User feels...".
+- Avoid formal wording like "career aspirations", "parental pressure", "emotional distress", "conflict", or "diagnostic".
+- Prefer one of these insight types when it fits:
+  1. Pattern: "You tend to feel calmer after short breaks.", "Mornings seem harder than evenings for you."
+  2. Strength: "You keep going even on difficult days.", "You reached out - that takes courage."
+  3. Gentle warning: "Late-night study sessions are increasing anxiety.", "Isolation tends to deepen your low moods."
+  4. Progress: "Your mood seems a little steadier than before.", "This week showed small but real improvement."
+  5. Personalized observation: "Career pressure seems to be your biggest stressor right now.", "Talking about family affects you deeply."
+  6. Compassionate: "It's okay that today was hard.", "You're carrying a lot - be gentle with yourself."
+- Keep each insight short enough for a small dashboard card, usually 6-12 words.
 - Keep suggestions specific to the user's context when possible.
 - Do not repeat the exact same generic suggestions every turn.
 
@@ -249,6 +261,80 @@ def is_positive_relationship_message(message: str) -> bool:
 
     return has_positive and has_relationship and not has_distress
 
+def get_history_text(history: list[ChatMessage]) -> str:
+    return " ".join(msg.content for msg in history if msg.content.strip())
+
+def make_insight_natural(text: str) -> str:
+    replacements = {
+        r"^(the\s+)?user\s+feels?\s+": "You may be feeling ",
+        r"^(the\s+)?user\s+is\s+feeling\s+": "You may be feeling ",
+        r"^(the\s+)?user\s+is\s+experiencing\s+": "You may be noticing ",
+        r"^(the\s+)?user\s+is\s+reporting\s+": "You mentioned ",
+        r"^(the\s+)?user\s+reported\s+": "You mentioned ",
+        r"^(the\s+)?user\s+may\s+feel\s+": "You may be feeling ",
+        r"^(the\s+)?user\s+is\s+": "You are ",
+        r"^(the\s+)?user\s+has\s+": "You have ",
+        r"^(the\s+)?user\s+": "You ",
+    }
+    natural = text
+    for pattern, replacement in replacements.items():
+        natural = re.sub(pattern, replacement, natural, flags=re.IGNORECASE)
+
+    phrase_replacements = {
+        "career aspirations": "career goals",
+        "parental pressure": "family pressure",
+        "a strong conflict between": "tension between",
+        "strong conflict between": "tension between",
+        "emotional distress": "emotional weight",
+        "experiencing anxiety": "feeling anxious",
+        "exhibiting": "showing",
+        "demonstrating": "showing",
+        "resilience": "strength",
+    }
+    for formal, casual in phrase_replacements.items():
+        natural = re.sub(formal, casual, natural, flags=re.IGNORECASE)
+
+    natural = re.sub(r"\btheir\b", "your", natural, flags=re.IGNORECASE)
+    natural = re.sub(r"\bthem\b", "you", natural, flags=re.IGNORECASE)
+    natural = natural[:1].upper() + natural[1:] if natural else natural
+    return natural
+
+def normalize_dashboard_items(items, fallback: list[str], naturalize_insights: bool = False) -> list[str]:
+    if not isinstance(items, list):
+        return fallback
+
+    normalized = []
+    for item in items:
+        if not isinstance(item, str):
+            continue
+
+        text = re.sub(r"\s+", " ", item).strip()
+        if naturalize_insights:
+            text = make_insight_natural(text)
+        if text:
+            normalized.append(text[:180])
+
+        if len(normalized) == MAX_DASHBOARD_ITEMS:
+            break
+
+    return normalized or fallback
+
+def get_default_insights(emotions: list[str] | None = None) -> list[str]:
+    if emotions:
+        readable_emotions = ", ".join(emotions[:2])
+        return [f"Your recent messages carry a {readable_emotions} tone."]
+
+    return ["Small patterns will show up as you share more."]
+
+def get_default_suggestions(crisis: bool = False) -> list[str]:
+    if crisis:
+        return [
+            "Stay near someone you trust if possible.",
+            "Contact a local crisis helpline or emergency service now.",
+        ]
+
+    return ["Take one slow breath and name the hardest part in one sentence."]
+
 def is_relationship_message(message: str) -> bool:
     text = normalize_hinglish_text(message)
     relationship_terms = [
@@ -319,8 +405,8 @@ def get_positive_achievement_response(message: str) -> dict:
             emotions=["happy", "proud", "excited"],
         ),
         "insights": [
-            "Achievement is showing up as a positive emotional boost.",
-            "The user may feel proud and energized right now.",
+            "Your effort is turning into visible progress.",
+            "You deserve to let this win sink in.",
         ],
         "suggestions": [
             "Pause for a moment and let the achievement sink in.",
@@ -349,8 +435,8 @@ def get_positive_mood_response(message: str) -> dict:
             emotions=["happy", "calm"],
         ),
         "insights": [
-            "The user is currently reporting a lighter mood.",
-            "This may be a good moment to notice what is helping.",
+            "Your mood is sounding lighter right now.",
+            "Something about today seems to be helping.",
         ],
         "suggestions": [
             "Notice one thing that made today feel better.",
@@ -380,8 +466,8 @@ def get_positive_relationship_response(message: str) -> dict:
             emotions=["happy", "excited", "loved"],
         ),
         "insights": [
-            "The user is sharing happy relationship-related news.",
-            "Excitement and connection are present in this moment.",
+            "Connection seems to be lifting your mood.",
+            "You are letting yourself enjoy a sweet moment.",
         ],
         "suggestions": [
             "Enjoy the moment before overthinking the next step.",
@@ -396,43 +482,6 @@ def get_last_user_message(history: list[ChatMessage]) -> str | None:
         if msg.role == "user" and msg.content.strip():
             return msg.content
     return None
-
-def get_history_text(history: list[ChatMessage]) -> str:
-    return " ".join(msg.content for msg in history if msg.content.strip())
-
-def normalize_dashboard_items(items, fallback: list[str]) -> list[str]:
-    if not isinstance(items, list):
-        return fallback
-
-    normalized = []
-    for item in items:
-        if not isinstance(item, str):
-            continue
-
-        text = re.sub(r"\s+", " ", item).strip()
-        if text:
-            normalized.append(text[:180])
-
-        if len(normalized) == MAX_DASHBOARD_ITEMS:
-            break
-
-    return normalized or fallback
-
-def get_default_insights(emotions: list[str] | None = None) -> list[str]:
-    if emotions:
-        readable_emotions = ", ".join(emotions[:2])
-        return [f"Current conversation tone suggests {readable_emotions}."]
-
-    return ["Share a little more so MindEase can understand the pattern."]
-
-def get_default_suggestions(crisis: bool = False) -> list[str]:
-    if crisis:
-        return [
-            "Stay near someone you trust if possible.",
-            "Contact a local crisis helpline or emergency service now.",
-        ]
-
-    return ["Take one slow breath and name the hardest part in one sentence."]
 
 def get_valid_gemini_history(history: list[ChatMessage]) -> list[ChatMessage]:
     valid_history = [
@@ -535,8 +584,8 @@ def get_contextual_fallback_response(message: str, history: list[ChatMessage]) -
                 emotions=["happy", "proud"],
             ),
             "insights": [
-                "The user is referring back to an earlier achievement.",
-                "Remembered progress appears to be supporting their mood.",
+                "That earlier win is still lifting you.",
+                "Remembered progress seems to support your mood.",
             ],
             "suggestions": [
                 "Use this result as evidence that effort is working.",
@@ -823,6 +872,7 @@ def get_ai_response(message: str, history: list[ChatMessage]) -> dict:
         insights = normalize_dashboard_items(
             parsed.get("insights"),
             get_default_insights(emotions),
+            naturalize_insights=True,
         )
         suggestions = normalize_dashboard_items(
             parsed.get("suggestions"),
