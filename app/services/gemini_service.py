@@ -638,7 +638,82 @@ def build_system_instruction(history: list[ChatMessage]) -> str:
 RECENT CHAT HISTORY FOR CONTINUITY:
 {recent_context}
 
-Use this history to understand what the user's latest message refers to. If they say things like "it", "this", "that", "I love it", "same", or answer your previous question, resolve it from the recent chat before choosing a topic."""
+Use this history to understand what the user's latest message refers to. If they say things like "it", "this", "that", "I love it", "same", "what should I do now", "what now", or answer your previous question, resolve it from the recent chat before choosing a topic. Never restart with "what's on your mind" when history already explains the situation."""
+
+def is_advice_followup_message(message: str) -> bool:
+    text = normalize_hinglish_text(message)
+    advice_phrases = [
+        "what should i do",
+        "what do i do",
+        "what now",
+        "what should i say",
+        "how do i handle",
+        "how should i handle",
+        "any advice",
+        "help me",
+        "ab kya",
+        "kya karu",
+        "kya karun",
+        "kya karna chahiye",
+        "kaise handle",
+    ]
+    return any(phrase in text for phrase in advice_phrases)
+
+def is_generic_restart_reply(reply: str) -> bool:
+    text = normalize_hinglish_text(reply)
+    restart_phrases = [
+        "whats on your mind",
+        "what is on your mind",
+        "tell me more",
+        "say it however it comes to mind",
+        "im listening",
+    ]
+    return any(phrase in text for phrase in restart_phrases)
+
+def get_contextual_advice_response(message: str, history: list[ChatMessage]) -> dict | None:
+    if not history or not is_advice_followup_message(message):
+        return None
+
+    history_text = normalize_hinglish_text(get_history_text(history))
+    use_hinglish = uses_hindi_or_hinglish(message)
+
+    if any(term in history_text for term in ["parent", "parents", "family", "ghar", "pressure"]) and any(
+        term in history_text
+        for term in ["career", "engineering", "design", "college", "study", "stream"]
+    ):
+        if use_hinglish:
+            reply = (
+                "Abhi pehle unhe convince karne ki jagah conversation ko calm karna better hoga. "
+                "Ek baar unse bolo ki tum unki concern samajhte ho, phir design ke options, scope, aur backup plan calmly dikhao."
+            )
+        else:
+            reply = (
+                "Right now, try to slow the conversation down instead of proving everything at once. "
+                "Tell them you understand their concern, then show your design options, scope, and a practical backup plan calmly."
+            )
+
+        return {
+            "reply": reply,
+            "emotion_scores": EmotionScores(
+                anxiety_score=7,
+                stress_score=8,
+                emotions=["pressured", "uncertain"],
+            ),
+            "insights": [
+                "Family pressure is making career choices feel heavier.",
+                "You care about being understood, not just winning.",
+                "Your design interest keeps coming back strongly.",
+            ],
+            "suggestions": [
+                "Write down three practical reasons design matters to you.",
+                "Prepare one backup plan before the next conversation.",
+                "Choose a calmer time before bringing it up again.",
+            ],
+            "is_crisis": False,
+            "crisis_resources": None,
+        }
+
+    return None
 
 def get_fallback_response(message: str, history: list[ChatMessage] | None = None) -> dict:
     history = history or []
@@ -666,6 +741,8 @@ def get_fallback_response(message: str, history: list[ChatMessage] | None = None
         return get_positive_relationship_response(message)
     elif is_positive_mood_message(message):
         return get_positive_mood_response(message)
+    elif contextual_advice := get_contextual_advice_response(message, history):
+        return contextual_advice
     elif contextual_response := get_contextual_fallback_response(message, history):
         return contextual_response
     elif any(word in text for word in ["exam", "study", "marks", "math", "assignment", "test"]):
@@ -859,6 +936,10 @@ def get_ai_response(message: str, history: list[ChatMessage]) -> dict:
         reply = parsed.get("reply", "Hey, I'm listening. What's on your mind?")
         if not uses_hindi_or_hinglish(message) and uses_hindi_or_hinglish(reply):
             return get_fallback_response(message, trimmed_history)
+        if trimmed_history and is_generic_restart_reply(reply):
+            contextual_response = get_contextual_advice_response(message, trimmed_history)
+            if contextual_response:
+                return contextual_response
 
         emotions = parsed.get("emotions", ["neutral"])
         if not isinstance(emotions, list):

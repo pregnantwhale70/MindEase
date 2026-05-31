@@ -24,7 +24,7 @@ export const useChat = () => {
   ]);
 
   const sendMessage = async (input) => {
-    if (!input.trim()) return;
+    if (!input.trim() || loading) return;
 
     const userMessage = {
       role: "user",
@@ -58,8 +58,16 @@ export const useChat = () => {
       setMessages((prev) => [...prev, aiMessage]);
       setStress(data.emotion_scores.stress_score);
       setAnxiety(data.emotion_scores.anxiety_score);
-      setInsights(data.insights || []);
-      setSuggestions(data.suggestions) || [];
+      setInsights(
+        Array.isArray(data.insights) && data.insights.length
+          ? data.insights
+          : insights
+      );
+      setSuggestions(
+        Array.isArray(data.suggestions) && data.suggestions.length
+          ? data.suggestions
+          : suggestions
+      );
 
     } catch (error) {
       console.error(error);
