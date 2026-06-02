@@ -88,6 +88,7 @@ CRISIS_RESOURCES = [
 MAX_HISTORY_CONTEXT = 12
 GEMINI_MODEL = "gemini-2.5-flash"
 MAX_DASHBOARD_ITEMS = 3
+MAX_SESSION_SUMMARY_LENGTH = 1400
 
 def normalize_hinglish_text(message: str) -> str:
     text = message.lower()
@@ -620,8 +621,15 @@ def compact_context_line(content: str, max_length: int = 280) -> str:
         return line
     return f"{line[:max_length].rstrip()}..."
 
-def build_system_instruction(history: list[ChatMessage]) -> str:
-    if not history:
+def compact_session_summary(summary: str) -> str:
+    cleaned = re.sub(r"\s+", " ", summary).strip()
+    if len(cleaned) <= MAX_SESSION_SUMMARY_LENGTH:
+        return cleaned
+    return cleaned[-MAX_SESSION_SUMMARY_LENGTH:].strip()
+
+def build_system_instruction(history: list[ChatMessage], session_summary: str = "") -> str:
+    session_summary = compact_session_summary(session_summary)
+    if not history and not session_summary:
         return SYSTEM_PROMPT
 
     recent_lines = [
@@ -629,16 +637,92 @@ def build_system_instruction(history: list[ChatMessage]) -> str:
         for msg in history[-8:]
         if msg.content.strip()
     ]
-    if not recent_lines:
-        return SYSTEM_PROMPT
-
     recent_context = "\n".join(recent_lines)
-    return f"""{SYSTEM_PROMPT}
+    memory_block = ""
+    if session_summary:
+        memory_block = f"""
+
+SESSION MEMORY SUMMARY:
+{session_summary}
+
+Use this summary as long-term session memory. It may contain older details that are no longer visible in recent chat history."""
+
+    recent_block = ""
+    if recent_context:
+        recent_block = f"""
 
 RECENT CHAT HISTORY FOR CONTINUITY:
-{recent_context}
+{recent_context}"""
 
-Use this history to understand what the user's latest message refers to. If they say things like "it", "this", "that", "I love it", "same", "what should I do now", "what now", or answer your previous question, resolve it from the recent chat before choosing a topic. Never restart with "what's on your mind" when history already explains the situation."""
+    return f"""{SYSTEM_PROMPT}{memory_block}{recent_block}
+
+Use the session memory and recent history to understand what the user's latest message refers to. If they say things like "it", "this", "that", "I love it", "same", "what should I do now", "what now", or answer your previous question, resolve it from context before choosing a topic. Never restart with "what's on your mind" when memory or history already explains the situation."""
+
+def build_fallback_summary(previous_summary: str, history: list[ChatMessage]) -> str:
+    user_lines = [
+        compact_context_line(msg.content, 180)
+        for msg in history
+        if msg.role == "user" and msg.content.strip()
+    ]
+    summary_parts = []
+    if previous_summary.strip():
+        summary_parts.append(compact_session_summary(previous_summary))
+    if user_lines:
+        summary_parts.append("Recent user details: " + " | ".join(user_lines[-8:]))
+
+    return compact_session_summary(" ".join(summary_parts))
+
+def update_conversation_summary(previous_summary: str, history: list[ChatMessage]) -> str:
+    if not history:
+        return compact_session_summary(previous_summary)
+
+    recent_lines = [
+        f"{msg.role}: {compact_context_line(msg.content, 260)}"
+        for msg in history[-12:]
+        if msg.content.strip()
+    ]
+    if not recent_lines:
+        return compact_session_summary(previous_summary)
+
+    prompt = f"""
+Update this MindEase session memory summary.
+
+Keep stable facts and emotional context that will matter later:
+- ongoing situations, people, goals, preferences, worries
+- important events and user decisions
+- recurring patterns and what helps
+
+Remove small talk, repeated assistant wording, and outdated details.
+Write 4-7 concise bullets in second person using "you".
+Do not add advice. Do not diagnose.
+Keep under {MAX_SESSION_SUMMARY_LENGTH} characters.
+
+Previous summary:
+{previous_summary or "None yet."}
+
+Recent conversation:
+{chr(10).join(recent_lines)}
+"""
+
+    try:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[types.Content(
+                role="user",
+                parts=[types.Part(text=prompt)],
+            )],
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+                top_p=0.8,
+            ),
+        )
+        summary = response.text.strip()
+        summary = re.sub(r'^```(?:text)?\s*', '', summary)
+        summary = re.sub(r'\s*```$', '', summary).strip()
+        return compact_session_summary(summary)
+    except Exception as e:
+        print(f"[ERROR] Summary update failed: {e}")
+        return build_fallback_summary(previous_summary, history)
 
 def is_advice_followup_message(message: str) -> bool:
     text = normalize_hinglish_text(message)
@@ -670,11 +754,15 @@ def is_generic_restart_reply(reply: str) -> bool:
     ]
     return any(phrase in text for phrase in restart_phrases)
 
-def get_contextual_advice_response(message: str, history: list[ChatMessage]) -> dict | None:
-    if not history or not is_advice_followup_message(message):
+def get_contextual_advice_response(
+    message: str,
+    history: list[ChatMessage],
+    session_summary: str = "",
+) -> dict | None:
+    if not (history or session_summary) or not is_advice_followup_message(message):
         return None
 
-    history_text = normalize_hinglish_text(get_history_text(history))
+    history_text = normalize_hinglish_text(f"{session_summary} {get_history_text(history)}")
     use_hinglish = uses_hindi_or_hinglish(message)
 
     if any(term in history_text for term in ["parent", "parents", "family", "ghar", "pressure"]) and any(
@@ -715,7 +803,11 @@ def get_contextual_advice_response(message: str, history: list[ChatMessage]) -> 
 
     return None
 
-def get_fallback_response(message: str, history: list[ChatMessage] | None = None) -> dict:
+def get_fallback_response(
+    message: str,
+    history: list[ChatMessage] | None = None,
+    session_summary: str = "",
+) -> dict:
     history = history or []
     text = normalize_hinglish_text(message)
     crisis = is_crisis_message(message)
@@ -741,7 +833,7 @@ def get_fallback_response(message: str, history: list[ChatMessage] | None = None
         return get_positive_relationship_response(message)
     elif is_positive_mood_message(message):
         return get_positive_mood_response(message)
-    elif contextual_advice := get_contextual_advice_response(message, history):
+    elif contextual_advice := get_contextual_advice_response(message, history, session_summary):
         return contextual_advice
     elif contextual_response := get_contextual_fallback_response(message, history):
         return contextual_response
@@ -876,7 +968,7 @@ def get_fallback_response(message: str, history: list[ChatMessage] | None = None
         "crisis_resources": CRISIS_RESOURCES if crisis else None,
     }
 
-def get_ai_response(message: str, history: list[ChatMessage]) -> dict:
+def get_ai_response(message: str, history: list[ChatMessage], session_summary: str = "") -> dict:
     contents = []
     trimmed_history = history[-MAX_HISTORY_CONTEXT:] if history else []
     gemini_history = get_valid_gemini_history(trimmed_history)
@@ -901,7 +993,7 @@ def get_ai_response(message: str, history: list[ChatMessage]) -> dict:
             model=GEMINI_MODEL,
             contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction=build_system_instruction(trimmed_history),
+                system_instruction=build_system_instruction(trimmed_history, session_summary),
                 temperature=0.8,
                 top_p=0.95,
             )
@@ -935,9 +1027,9 @@ def get_ai_response(message: str, history: list[ChatMessage]) -> dict:
 
         reply = parsed.get("reply", "Hey, I'm listening. What's on your mind?")
         if not uses_hindi_or_hinglish(message) and uses_hindi_or_hinglish(reply):
-            return get_fallback_response(message, trimmed_history)
-        if trimmed_history and is_generic_restart_reply(reply):
-            contextual_response = get_contextual_advice_response(message, trimmed_history)
+            return get_fallback_response(message, trimmed_history, session_summary)
+        if (trimmed_history or session_summary) and is_generic_restart_reply(reply):
+            contextual_response = get_contextual_advice_response(message, trimmed_history, session_summary)
             if contextual_response:
                 return contextual_response
 
@@ -975,4 +1067,4 @@ def get_ai_response(message: str, history: list[ChatMessage]) -> dict:
 
     except Exception as e:
         print(f"[ERROR] Gemini API failed: {e}")
-        return get_fallback_response(message, gemini_history)
+        return get_fallback_response(message, gemini_history, session_summary)

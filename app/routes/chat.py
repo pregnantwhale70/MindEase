@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from app.models.schemas import ChatMessage, ChatRequest, ChatResponse
-from app.services.gemini_service import get_ai_response
+from app.services.gemini_service import get_ai_response, update_conversation_summary
 from app.services.alert_service import send_crisis_alert
 import json
 import sqlite3
@@ -36,6 +36,18 @@ def init_emotion_scores_table():
             stress_score INTEGER,
             emotions TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def init_chat_summary_table():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS chat_summaries (
+            session_id TEXT PRIMARY KEY,
+            summary TEXT NOT NULL DEFAULT '',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     conn.commit()
@@ -83,6 +95,30 @@ def save_emotion_scores(session_id: str, emotion_scores):
     conn.commit()
     conn.close()
 
+def get_chat_summary(session_id: str) -> str:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT summary FROM chat_summaries WHERE session_id = ?",
+        (session_id,),
+    ).fetchone()
+    conn.close()
+    return row["summary"] if row and row["summary"] else ""
+
+def save_chat_summary(session_id: str, summary: str):
+    conn = get_db()
+    conn.execute(
+        """
+        INSERT INTO chat_summaries (session_id, summary, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(session_id) DO UPDATE SET
+            summary = excluded.summary,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (session_id, summary),
+    )
+    conn.commit()
+    conn.close()
+
 def get_request_history(request: ChatRequest) -> list[ChatMessage]:
     return [
         message
@@ -92,14 +128,16 @@ def get_request_history(request: ChatRequest) -> list[ChatMessage]:
 
 init_chat_table()
 init_emotion_scores_table()
+init_chat_summary_table()
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     request_history = get_request_history(request)
     history = request_history or get_chat_history(request.session_id)
+    session_summary = get_chat_summary(request.session_id)
 
     try:
-        result = get_ai_response(request.message, history)
+        result = get_ai_response(request.message, history, session_summary)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
 
@@ -132,6 +170,15 @@ async def chat(request: ChatRequest):
 
     save_chat_message(request.session_id, "assistant", result["reply"])
     save_emotion_scores(request.session_id, result["emotion_scores"])
+    updated_summary = update_conversation_summary(
+        session_summary,
+        [
+            *history,
+            ChatMessage(role="user", content=request.message),
+            ChatMessage(role="assistant", content=result["reply"]),
+        ],
+    )
+    save_chat_summary(request.session_id, updated_summary)
 
     return ChatResponse(
         reply=result["reply"],
