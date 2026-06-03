@@ -67,6 +67,88 @@ def init_emotion_scores_table():
 init_mood_table()
 init_emotion_scores_table()
 
+def parse_emotions(value: str | None) -> List[str]:
+    if not value:
+        return []
+
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, list):
+            return [str(emotion).strip() for emotion in parsed if str(emotion).strip()]
+    except json.JSONDecodeError:
+        pass
+
+    return [emotion.strip() for emotion in value.split(",") if emotion.strip()]
+
+def get_stress_color(score: int) -> str:
+    if score <= 3:
+        return "green"
+    if score <= 6:
+        return "yellow"
+    if score <= 8:
+        return "orange"
+    return "red"
+
+def get_breathing_pattern_for_score(stress_score: int | None) -> dict:
+    if stress_score is None:
+        return {
+            "pattern": "rhythmic",
+            "label": "Follow the rhythm and breathe",
+            "inhale": 4,
+            "hold1": 4,
+            "exhale": 4,
+            "hold2": 0,
+        }
+
+    if stress_score <= 4:
+        return {
+            "pattern": "rhythmic",
+            "label": "Rhythmic breathing - you're doing well",
+            "inhale": 4,
+            "hold1": 4,
+            "exhale": 4,
+            "hold2": 0,
+        }
+
+    if stress_score <= 7:
+        return {
+            "pattern": "478",
+            "label": "4-7-8 breathing - for anxiety relief",
+            "inhale": 4,
+            "hold1": 7,
+            "exhale": 8,
+            "hold2": 0,
+        }
+
+    return {
+        "pattern": "box",
+        "label": "Box breathing - for high stress",
+        "inhale": 4,
+        "hold1": 4,
+        "exhale": 4,
+        "hold2": 4,
+    }
+
+def build_emotional_state(
+    anxiety_score: int,
+    stress_score: int,
+    emotions: List[str],
+    trend: str = "stable",
+) -> dict:
+    stress_load_percent = round(((stress_score + anxiety_score) / 2) * 10)
+    return {
+        "stress_score": stress_score,
+        "anxiety_score": anxiety_score,
+        "stress_load_percent": stress_load_percent,
+        "stress_color": get_stress_color(stress_score),
+        "anxiety_color": get_stress_color(anxiety_score),
+        "trend": trend,
+        "emotions": emotions,
+    }
+
+def get_emotional_state_defaults() -> dict:
+    return build_emotional_state(4, 4, [])
+
 @router.post("/mood", response_model=MoodResponse)
 def save_mood(entry: MoodEntry):
     if not 1 <= entry.score <= 10:
@@ -116,6 +198,77 @@ def get_analytics(session_id: str, days: int = 7):
         lowest=min(scores)
     )
 
+@router.get("/breathing/{session_id}")
+def get_breathing(session_id: str):
+    conn = None
+    try:
+        conn = get_db()
+        row = conn.execute("""
+            SELECT stress_score
+            FROM emotion_scores
+            WHERE session_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+        """, (session_id,)).fetchone()
+
+        stress_score = row["stress_score"] if row else None
+        return get_breathing_pattern_for_score(stress_score)
+    except Exception as e:
+        print(f"[ERROR] Breathing pattern lookup failed: {e}")
+        return get_breathing_pattern_for_score(None)
+    finally:
+        if conn:
+            conn.close()
+
+@router.get("/emotional-state/{session_id}")
+def get_emotional_state(session_id: str):
+    conn = None
+    try:
+        conn = get_db()
+        rows = conn.execute("""
+            SELECT anxiety_score, stress_score, emotions, created_at
+            FROM emotion_scores
+            WHERE session_id = ?
+            ORDER BY id DESC
+            LIMIT 5
+        """, (session_id,)).fetchall()
+
+        if not rows:
+            return get_emotional_state_defaults()
+
+        rows = list(reversed(rows))
+        anxiety_scores = [row["anxiety_score"] or 0 for row in rows]
+        stress_scores = [row["stress_score"] or 0 for row in rows]
+
+        anxiety_score = round(sum(anxiety_scores) / len(anxiety_scores))
+        stress_score = round(sum(stress_scores) / len(stress_scores))
+
+        trend = "stable"
+        if len(rows) >= 3:
+            previous_score = rows[-3]["stress_score"] or 0
+            latest_score = rows[-1]["stress_score"] or 0
+            if latest_score < previous_score:
+                trend = "decreasing"
+            elif latest_score > previous_score:
+                trend = "increasing"
+
+        emotions = []
+        seen = set()
+        for row in rows:
+            for emotion in parse_emotions(row["emotions"]):
+                normalized = emotion.lower()
+                if normalized not in seen:
+                    seen.add(normalized)
+                    emotions.append(normalized)
+
+        return build_emotional_state(anxiety_score, stress_score, emotions, trend)
+    except Exception as e:
+        print(f"[ERROR] Emotional state lookup failed: {e}")
+        return get_emotional_state_defaults()
+    finally:
+        if conn:
+            conn.close()
+
 @router.get("/insights/{session_id}", response_model=InsightsResponse)
 async def get_insights(session_id: str):
     conn = get_db()
@@ -157,7 +310,7 @@ async def get_insights(session_id: str):
         {
             "anxiety_score": row["anxiety_score"],
             "stress_score": row["stress_score"],
-            "emotions": json.loads(row["emotions"] or "[]"),
+            "emotions": parse_emotions(row["emotions"]),
             "created_at": row["created_at"],
         }
         for row in emotion_rows

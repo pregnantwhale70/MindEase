@@ -1,5 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from app.models.schemas import ChatMessage, ChatRequest, ChatResponse
+from app.routes.mood import (
+    build_emotional_state,
+    get_breathing_pattern_for_score,
+    get_stress_color,
+)
 from app.services.gemini_service import get_ai_response, update_conversation_summary
 from app.services.alert_service import send_crisis_alert
 import json
@@ -170,6 +175,10 @@ async def chat(request: ChatRequest):
 
     save_chat_message(request.session_id, "assistant", result["reply"])
     save_emotion_scores(request.session_id, result["emotion_scores"])
+    stress_score = result["emotion_scores"].stress_score
+    anxiety_score = result["emotion_scores"].anxiety_score
+    emotions = result["emotion_scores"].emotions
+    stress_load_percent = round(((stress_score + anxiety_score) / 2) * 10)
     updated_summary = update_conversation_summary(
         session_summary,
         [
@@ -191,4 +200,8 @@ async def chat(request: ChatRequest):
         alert_sent=alert_sent,
         emergency_contact_recommended=emergency_contact_recommended,
         emergency_contact_message=emergency_contact_message,
+        breathing_pattern=get_breathing_pattern_for_score(stress_score),
+        emotional_state=build_emotional_state(anxiety_score, stress_score, emotions),
+        stress_load_percent=stress_load_percent,
+        stress_color=get_stress_color(stress_score),
     )

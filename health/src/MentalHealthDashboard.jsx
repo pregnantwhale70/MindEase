@@ -3,7 +3,17 @@ import { useChat } from "./hooks/useChat";
 
 export default function MentalHealthDashboard() {
 
-  const { stress, anxiety, messages, sendMessage, loading, insights, suggestions } = useChat();
+  const {
+    stress,
+    anxiety,
+    stressLoadPercent,
+    breathingPattern,
+    messages,
+    sendMessage,
+    loading,
+    insights,
+    suggestions,
+  } = useChat();
 
   const messagesContainerRef = useRef(null);
 
@@ -265,7 +275,7 @@ export default function MentalHealthDashboard() {
                     <div className="w-28 h-28 rounded-full bg-slate-900 flex flex-col items-center justify-center shadow-lg border border-white/10">
 
                       <p className="text-4xl font-semibold text-white">
-                        72%
+                        {stressLoadPercent}%
                       </p>
 
                       <p className="text-xs text-slate-500 mt-1">
@@ -454,8 +464,7 @@ export default function MentalHealthDashboard() {
                   </div>
 
                   <p className="text-slate-400 text-sm mt-6 text-center leading-relaxed max-w-xs">
-                    Follow the rhythm slowly and allow
-                    your breathing to settle.
+                    {breathingPattern.label}
                   </p>
 
                 </div>

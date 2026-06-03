@@ -45,6 +45,23 @@ class EmotionScores(BaseModel):
     stress_score: int
     emotions: List[str]
 
+class BreathingPattern(BaseModel):
+    pattern: str
+    label: str
+    inhale: int
+    hold1: int
+    exhale: int
+    hold2: int
+
+class EmotionalState(BaseModel):
+    stress_score: int
+    anxiety_score: int
+    stress_load_percent: int
+    stress_color: str
+    anxiety_color: str
+    trend: str
+    emotions: List[str] = Field(default_factory=list)
+
 class ChatResponse(BaseModel):
     reply: str
     emotion_scores: EmotionScores
@@ -56,3 +73,7 @@ class ChatResponse(BaseModel):
     alert_sent: bool = False
     emergency_contact_recommended: bool = False
     emergency_contact_message: Optional[str] = None
+    breathing_pattern: BreathingPattern
+    emotional_state: EmotionalState
+    stress_load_percent: int
+    stress_color: str
