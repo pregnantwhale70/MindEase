@@ -1,6 +1,47 @@
 import { useState, useRef, useEffect } from "react";
 import { useChat } from "./hooks/useChat";
 
+// Breathing Animation Component
+function BreathingCircle({ breathingPattern }) {
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    if (!breathingPattern?.inhale) return;
+
+    const runCycle = async () => {
+      // Inhale
+      setScale(1.2);
+      await new Promise((r) => setTimeout(r, (breathingPattern.inhale || 4) * 1000));
+
+      // Hold after inhale
+      await new Promise((r) => setTimeout(r, (breathingPattern.hold1 || 4) * 1000));
+
+      // Exhale
+      setScale(1);
+      await new Promise((r) => setTimeout(r, (breathingPattern.exhale || 4) * 1000));
+
+      // Hold after exhale
+      await new Promise((r) => setTimeout(r, (breathingPattern.hold2 || 0) * 1000));
+    };
+
+    const totalCycle = ((breathingPattern.inhale || 4) + (breathingPattern.hold1 || 4) + (breathingPattern.exhale || 4) + (breathingPattern.hold2 || 0)) * 1000;
+    
+    runCycle();
+    const interval = setInterval(runCycle, totalCycle);
+
+    return () => clearInterval(interval);
+  }, [breathingPattern]);
+
+  return (
+    <div
+      className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-400 to-violet-500 flex items-center justify-center shadow-inner border border-white/10 transition-transform duration-1000 ease-in-out"
+      style={{ transform: `scale(${scale})` }}
+    >
+      <span className="text-white text-xs font-medium">•</span>
+    </div>
+  );
+}
+
 export default function MentalHealthDashboard() {
 
   const {
@@ -270,15 +311,23 @@ export default function MentalHealthDashboard() {
 
                 <div className="flex items-center justify-center py-4">
 
-                  <div className="w-40 h-40 rounded-full bg-gradient-to-br from-violet-500/20 via-cyan-500/20 to-teal-500/20 flex items-center justify-center shadow-inner">
+                  <div className="relative w-40 h-40 rounded-full flex items-center justify-center">
+                    {/* Outer glow circle */}
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-500/30 via-cyan-500/30 to-teal-500/30 blur-lg animate-pulse" />
+                    
+                    {/* Middle ring */}
+                    <div className="absolute inset-2 rounded-full border-2 border-gradient-to-r from-violet-500/40 via-cyan-500/40 to-violet-500/40" style={{
+                      backgroundImage: 'conic-gradient(from 0deg, rgba(139,92,246,0.4), rgba(34,211,238,0.4), rgba(139,92,246,0.4))'
+                    }} />
 
-                    <div className="w-28 h-28 rounded-full bg-slate-900 flex flex-col items-center justify-center shadow-lg border border-white/10">
+                    {/* Inner circle with stress load */}
+                    <div className="relative z-10 w-28 h-28 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 flex flex-col items-center justify-center shadow-lg border-2 border-white/10">
 
                       <p className="text-4xl font-semibold text-white">
-                        {stressLoadPercent}%
+                        {Math.round(stressLoadPercent) || 0}%
                       </p>
 
-                      <p className="text-xs text-slate-500 mt-1">
+                      <p className="text-xs text-slate-400 mt-1">
                         stress load
                       </p>
 
@@ -292,16 +341,16 @@ export default function MentalHealthDashboard() {
 
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span>Stress</span>
-                      <span>{stress}/10</span>
+                      <span className="text-slate-300">Stress</span>
+                      <span className="text-cyan-400 font-semibold">{Math.round(stress) || 0}/10</span>
                     </div>
 
-                    <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-2 w-full bg-slate-800/60 rounded-full overflow-hidden border border-white/5">
 
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-violet-500 transition-all duration-500"
+                        className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-violet-500 transition-all duration-500 shadow-lg shadow-cyan-500/50"
                         style={{
-                          width: `${stress * 10}%`,
+                          width: `${Math.max(0, Math.min(100, (stress || 0) * 10))}%`,
                         }}
                       />
 
@@ -310,16 +359,16 @@ export default function MentalHealthDashboard() {
 
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span>Anxiety</span>
-                      <span>{anxiety}/10</span>
+                      <span className="text-slate-300">Anxiety</span>
+                      <span className="text-pink-400 font-semibold">{Math.round(anxiety) || 0}/10</span>
                     </div>
 
-                    <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-2 bg-slate-800/60 rounded-full overflow-hidden border border-white/5">
 
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-pink-500 to-violet-500 transition-all duration-500"
+                        className="h-full rounded-full bg-gradient-to-r from-pink-500 to-violet-500 transition-all duration-500 shadow-lg shadow-pink-500/50"
                         style={{
-                          width: `${anxiety * 10}%`,
+                          width: `${Math.max(0, Math.min(100, (anxiety || 0) * 10))}%`,
                         }}
                       />
 
@@ -337,16 +386,20 @@ export default function MentalHealthDashboard() {
                   Reflection Insights
                 </p>
 
-                <div className="grid flex-1 content-center gap-3">
+                <div className="space-y-3 flex-1 overflow-y-auto">
 
-                  {insights.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="bg-slate-900/80 border border-white/10 rounded-2xl p-4 text-sm leading-relaxed text-slate-300 shadow-sm"
-                    >
-                      {item}
-                    </div>
-                  ))}
+                  {insights && insights.length > 0 ? (
+                    insights.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="bg-slate-900/60 border border-white/10 rounded-2xl p-3 text-xs leading-relaxed text-slate-300 shadow-sm hover:border-white/20 transition"
+                      >
+                        {item}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-slate-500 text-xs">Insights will appear as patterns emerge...</p>
+                  )}
 
                 </div>
 
@@ -449,23 +502,29 @@ export default function MentalHealthDashboard() {
                   Breathing Companion
                 </p>
 
-                <div className="flex flex-col items-center justify-center py-4">
+                <div className="flex flex-col items-center justify-center py-4 gap-4">
 
-                  <div className="w-40 h-40 rounded-full bg-gradient-to-br from-violet-500/20 via-cyan-500/20 to-teal-500/20 animate-pulse flex items-center justify-center">
+                  <div className="relative w-40 h-40 rounded-full bg-gradient-to-br from-violet-500/20 via-cyan-500/20 to-teal-500/20 flex items-center justify-center animate-pulse">
 
-                    <div className="w-24 h-24 rounded-full bg-slate-900 flex items-center justify-center shadow-inner border border-white/10">
-
-                      <p className="text-slate-300 text-sm">
-                        inhale
-                      </p>
-
-                    </div>
+                    <BreathingCircle breathingPattern={breathingPattern} />
 
                   </div>
 
-                  <p className="text-slate-400 text-sm mt-6 text-center leading-relaxed max-w-xs">
-                    {breathingPattern.label}
-                  </p>
+                  <div className="text-center space-y-2">
+                    <p className="text-slate-300 text-sm font-medium">
+                      {breathingPattern?.pattern ? 
+                        `${breathingPattern.pattern.charAt(0).toUpperCase()}${breathingPattern.pattern.slice(1)}` 
+                        : 'Rhythmic'} Breathing
+                    </p>
+                    <p className="text-slate-400 text-xs leading-relaxed max-w-xs">
+                      {breathingPattern?.label || 'Follow the circle gently and allow your breathing to settle.'}
+                    </p>
+                    {breathingPattern?.inhale && (
+                      <p className="text-slate-500 text-xs">
+                        {breathingPattern.inhale}s inhale • {breathingPattern.hold1 || 0}s hold • {breathingPattern.exhale}s exhale
+                      </p>
+                    )}
+                  </div>
 
                 </div>
 
@@ -478,14 +537,20 @@ export default function MentalHealthDashboard() {
                   Gentle Suggestions
                 </p>
 
-                {suggestions.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="bg-slate-900/80 border border-white/10 rounded-2xl p-4 text-sm leading-relaxed text-slate-300 shadow-sm"
-                    >
-                      {item}
-                    </div>
-                  ))}
+                <div className="space-y-3 flex-1 overflow-y-auto">
+                  {suggestions && suggestions.length > 0 ? (
+                    suggestions.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="bg-slate-900/60 border border-white/10 rounded-2xl p-3 text-xs leading-relaxed text-slate-300 shadow-sm hover:border-white/20 transition"
+                      >
+                        {item}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-slate-500 text-xs">Suggestions will appear as we chat...</p>
+                  )}
+                </div>
 
               </div>
 
