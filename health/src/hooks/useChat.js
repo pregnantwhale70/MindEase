@@ -9,6 +9,7 @@ export const useChat = () => {
     },
   ]);
 
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [stress, setStress] = useState(0);
   const [anxiety, setAnxiety] = useState(0);
@@ -52,17 +53,22 @@ export const useChat = () => {
     setMessages((prev) => [...prev, userMessage]);
 
     setLoading(true);
-
+ 
     try {
-      const history = messages
-        .filter((message) => message.role === "user" || message.role === "assistant")
-        .map((message) => ({
-          role: message.role,
-          content: message.text,
-        }));
+const updatedHistory = [
+  ...history,
+  {
+    role: "user",
+    content: input,
+  },
+];
 
-      const data = await sendChatMessage(input, history);
+console.log("Sending history:", updatedHistory);
 
+const data = await sendChatMessage(
+  input,
+  updatedHistory
+);
       const aiMessage = {
         role: "assistant",
         text:
@@ -73,6 +79,13 @@ export const useChat = () => {
       };
 
       setMessages((prev) => [...prev, aiMessage]);
+      setHistory([
+  ...updatedHistory,
+  {
+    role: "assistant",
+    content: aiMessage.text,
+  },
+]);
       const nextStress =
         data.emotional_state?.stress_score ??
         data.emotion_scores?.stress_score ??
@@ -86,6 +99,7 @@ export const useChat = () => {
         data.stress_load_percent ??
         Math.round(((nextStress + nextAnxiety) / 2) * 10);
 
+      
       setStress(nextStress);
       setAnxiety(nextAnxiety);
       setStressLoadPercent(nextStressLoad);
